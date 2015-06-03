@@ -1,0 +1,43 @@
+---
+- name:  Configure rabbitmq server
+  connection: local
+  hosts: localhost
+  sudo:  True
+  tasks:
+
+
+  - name: Ensure sensu vhost is present
+    rabbitmq_vhost:
+        name: /sensu
+        state: present
+
+  - name: Ensure sensu user is present
+    rabbitmq_user:
+      user: sensu
+      password: "vjM,HAf,Gp_9QlLxOjaA" 
+      vhost: /sensu
+      configure_priv: .*
+      read_priv: .*
+      write_priv: .*
+      state: present
+      force: yes
+
+  - name: Ensure admin user is present
+    rabbitmq_user:
+      user: admin
+      password: admin
+      vhost: /sensu
+      configure_priv: .*
+      read_priv: .*
+      write_priv: .*
+      state: present
+      force: yes
+
+  - name: Set tag for admin user
+    command: rabbitmqctl set_user_tags admin administrator
+
+  - name: ensure rabbitmq server is started and enabled
+    service: 
+      name: rabbitmq-server 
+      state: restarted 
+      enabled: yes

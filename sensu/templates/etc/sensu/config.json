@@ -1,0 +1,17 @@
+{
+  "rabbitmq": {
+    "host": "{{ rabbit_host }}",
+    "port": 5672,
+    "vhost": "/sensu",
+    "user": "sensu",
+    "password": "{{ sensu_rabbit_password }}"
+  },
+  "redis": {
+    "host": "{{ redis_host }}",
+    "port": 6379
+  },
+  "api": {
+    "host": "{{ sensu_host }}",
+    "port": 4567
+  }
+}

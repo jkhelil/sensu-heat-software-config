@@ -1,0 +1,450 @@
+#!/usr/bin/perl -w
+# tsync::casole serrara-bck sperlonga-bck silea-bck siracusa-bck
+# sync:: sanremo-bck sarnico-bck selvino-bck saronno-bck
+####################################################
+# check_drbd v0.5.2                                #
+# by Brandon Lee Poyner    bpoyner / CCAC.edu      #
+####################################################
+
+use strict;
+use File::Basename;
+use Getopt::Long;
+
+my $drbd_proc='/proc/drbd';
+my $drbd_devices=0;
+my ($drbd_expect, $drbd_role, $drbd_version, $debug_mode); 
+my (%options, %cs, %st, %ld, %ds, %check, %warning, %critical);
+
+my $prog_name=basename($0);
+my $prog_revision='0.5.2';
+
+my %errorcodes = (
+        'OK' => { 'retvalue' => 0 },
+        'WARN' => { 'retvalue' => 1 },
+        'CRIT' => { 'retvalue' => 2 },
+        'UNKNOWN' => { 'retvalue' => 3 }
+);
+
+# 
+# Define various states and default alarm values
+#
+my %state = ( 
+              'Primary' => { 'value' => 'OK', 'type' => 'st' },
+              'Secondary' => { 'value' => 'OK', 'type' => 'st' },
+              'Unknown' => { 'value' => 'CRIT', 'type' => 'st' },
+              'Connected' => { 'value' => 'OK', 'type' => 'cs' },
+              'StandAlone' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'Unconfigured' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'Unconnected' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'Timeout' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'BrokenPipe' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'WFConnection' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'WFReportParams' => { 'value' => 'CRIT', 'type' => 'cs' },
+              # DRBD 0.6
+              'SyncingAll' => { 'value' => 'WARN', 'type' => 'cs' },
+              'SyncingQuick' => { 'value' => 'WARN', 'type' => 'cs' },
+              'SyncPaused' => { 'value' => 'CRIT', 'type' => 'cs' },
+              # DRBD 0.7
+              'SyncSource' => { 'value' => 'WARN', 'type' => 'cs' }, 
+              'SyncTarget' => { 'value' => 'WARN', 'type' => 'cs' },
+              'NetworkFailure' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'SkippedSyncS' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'SkippedSyncT' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'WFBitMapS' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'WFBitMapT' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'PausedSyncS' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'PausedSyncT' => { 'value' => 'CRIT', 'type' => 'cs' },
+              'Consistent' => { 'value' => 'OK', 'type' => 'ld' }, 
+              'Inconsistent' => { 'value' => 'CRIT', 'type' => 'ld' },
+              # DRBD 8.0
+              'UpToDate' => { 'value' => 'OK', 'type' => 'ds' },
+              'Consistent' => { 'value' => 'OK', 'type' => 'ds' },
+              'Negotiating' => { 'value' => 'WARN', 'type' => 'ds' },
+              'Attaching' => { 'value' => 'WARN', 'type' => 'ds' },
+              'Diskless' => { 'value' => 'CRIT', 'type' => 'ds' },
+              'Failed' => { 'value' => 'CRIT', 'type' => 'ds' },
+              'Outdated' => { 'value' => 'CRIT', 'type' => 'ds' },
+              'Inconsistent' => { 'value' => 'CRIT', 'type' => 'ds' },
+              'DUnknown' => { 'value' => 'CRIT', 'type' => 'ds' },
+              # DRBD 8.2
+              'VerifyT' => { 'value' => 'WARN', 'type' => 'cs' },
+              'VerifyS' => { 'value' => 'WARN', 'type' => 'cs' }
+);
+
+&parse_options;
+&parse_proc;
+&parse_drbd_devices;
+&check_drbd_state;
+&report_status;
+&myexit('UNKNOWN',"$prog_name should never reach here");
+
+sub print_usage {
+        print <<EOF
+Usage: $prog_name [-d <All|Configured|...>] [-e expect] [-p proc] [-r role] [-o states] [-w states] [-c states] [--debug]
+        Options:
+        -d STRING [default: $drbd_devices.  Example: 0,1,2 ]
+        -p STRING [default: $drbd_proc.  Use '-' for stdin]
+        -e STRING [Must be this connected state. Example: Connected]
+        -r STRING [Must be this node state. Example: Primary]
+        -o STRING [Change value to OK. Example: StandAlone]
+        -w STRING [Change value to WARN. Example: SyncingAll]
+        -c STRING [Change value to CRIT. Example: Inconsistent,WFConnection]
+EOF
+}
+
+sub print_revision {
+        print <<EOF;
+$prog_name $prog_revision
+
+The nagios plugins come with ABSOLUTELY NO WARRANTY. You may redistribute
+copies of the plugins under the terms of the GNU General Public License.
+For more information about these matters, see the file named COPYING.
+EOF
+
+}
+
+sub print_help {
+        &print_revision;
+        print "\n";
+        &print_usage;
+        print <<EOF;
+
+Send email to nagios-users\@lists.sourceforge.net if you have questions
+regarding use of this software. To submit patches or suggest improvements,
+send email to bpoyner\@ccac.edu
+EOF
+        exit $errorcodes{'UNKNOWN'}->{'retvalue'};
+}
+
+sub parse_options {
+        my ($help, $version, $debug, $ok_string, $warning_string, 
+            $critical_string); 
+        #
+        # Get command line options
+        #
+        GetOptions("h|help" => \$help,
+                "V|version" => \$version,
+                "d|device|devices=s" => \$drbd_devices,
+                "e|expect=s" => \$drbd_expect,
+                "p|proc=s" => \$drbd_proc,
+                "r|role=s" => \$drbd_role,
+                "o|ok=s" => \$ok_string,
+                "w|warning=s" => \$warning_string,
+                "c|critical=s" => \$critical_string,
+                "debug" => \$debug);
+        if (defined($help) && ($help ne "")) {
+                &print_help;
+                exit $errorcodes{'UNKNOWN'}->{'retvalue'};
+        }
+        if (defined($version) && ($version ne "")) {
+                &print_revision;
+                exit $errorcodes{'UNKNOWN'}->{'retvalue'};
+        }
+        if (defined($drbd_expect) && ($drbd_expect ne "")) {
+                # User requested the connected state to be very specific
+                &change_values($drbd_expect,'cs','expect','connected state');
+        }
+        if (defined($drbd_role) && ($drbd_role ne "")) {
+                # User requested the node state to be very specific
+                &change_values($drbd_role,'st','role','node state');
+        }
+        if (defined($ok_string) && ($ok_string ne "")) {
+                # User requested certain values to be OK
+                &set_values($ok_string,'OK');
+        }
+        if (defined($warning_string) && ($warning_string ne "")) {
+                # User requested certain values to be WARN
+                &set_values($warning_string,'WARN');
+        }
+        if (defined($critical_string) && ($critical_string ne "")) {
+                # User requested certain values to be CRIT
+                &set_values($critical_string,'CRIT');
+        }
+        if (defined($debug) && ($debug ne "")) {
+                # 
+                # Debugging information
+                #
+                $debug_mode=1;
+                print STDERR "<$prog_name settings>\n";
+                print STDERR "DRBD Devices: $drbd_devices\n";
+                printf STDERR "DRBD Proc: %s\n", defined($drbd_proc)?$drbd_proc:"";
+                printf STDERR "DRBD Expect: %s\n", defined($drbd_expect)?$drbd_expect:"";
+                printf STDERR "DRBD Role: %s\n", defined($drbd_role)?$drbd_role:"";
+                my (@ok, @critical, @warning);
+                for my $key ( keys %state ) {
+                        if ($state{$key}->{'value'} eq 'OK') {
+                                push(@ok,$key);
+                        }
+                        if ($state{$key}->{'value'} eq 'WARN') {
+                                push(@warning,$key);
+                        }
+                        if ($state{$key}->{'value'} eq 'CRIT') {
+                                push(@critical,$key);
+                        }
+                }
+                printf STDERR "DRBD OK: %s\n", join(" ",sort(@ok));
+                printf STDERR "DRBD WARN: %s\n", join(" ",sort(@warning));
+                printf STDERR "DRBD CRIT: %s\n", join(" ",sort(@critical));
+                print STDERR "</$prog_name settings>\n";
+        }
+}
+
+sub parse_proc {
+        #
+        # Read in contents of proc file, feed results into hashes
+        #
+        my $input;
+        if ( $drbd_proc ne "-" ) {
+                $input = "DRBD";
+                if ( ! -e $drbd_proc ) {
+                        &myexit('UNKNOWN',"No such file $drbd_proc");
+                }
+                open(DRBD, "$drbd_proc") || 
+                        &myexit('UNKNOWN',"Could not open $drbd_proc");
+        } else {
+                $input = "STDIN";
+        }
+        while(<$input>) {
+                if (/^version: (\d+).(\d+)/) {
+                        $drbd_version = "$1.$2";
+                }
+                if (/^\s?(\d+):.* cs:(\w+)/) {
+                        $cs{$1} = $2;
+                }
+                if (/^\s?(\d+):.* st:(\w+)\//) {
+                        $st{$1} = $2;
+                }
+                if (/^\s?(\d+):.* ld:(\w+)/) {
+                        $ld{$1} = $2;
+                }
+                if (/^\s?(\d+):.* ds:(\w+)/) {
+                        $ds{$1} = $2;
+                }
+        }
+        if ( $drbd_proc ne "-" ) {
+                close(DRBD);
+        }
+        if (defined($debug_mode) && ($debug_mode == 1)) {
+                # 
+                # Debugging information
+                #
+                print STDERR "<$prog_name devices found>\n";
+                for my $key ( sort keys %cs ) {
+                        printf STDERR "Found Device $key $cs{$key}%s%s%s\n", defined($st{$key})?" $st{$key}":"", defined($ld{$key})?" $ld{$key}":"", defined($ds{$key})?" $ds{$key}":"";
+                }
+                print STDERR "</$prog_name devices found>\n";
+        }
+}
+
+sub parse_drbd_devices {
+        #
+        # Determine which DRBD devices to monitor
+        #
+        my @devices;
+        if ($drbd_devices =~ /^all$/i) {
+                for my $device ( keys %cs ) {
+                        push(@devices,$device);
+                }
+        } elsif ($drbd_devices =~ /^configured$/i) {
+                for my $device ( keys %cs ) {
+                        next if ($cs{$device} eq "Unconfigured");
+                        push(@devices,$device);
+                }
+        } else {
+                @devices = split(/,/,$drbd_devices);
+        }
+        foreach my $device (@devices) {
+                if (!(defined($cs{$device}))) {
+                        &myexit('UNKNOWN',"Could not find device $device");
+                }
+                $check{$device} = 1;
+        }
+        if (int(keys %check) == 0) {
+                &myexit('UNKNOWN',"No configured devices found");
+        }
+        if (defined($debug_mode) && ($debug_mode == 1)) {
+                # 
+                # Debugging information
+                #
+                print STDERR "<$prog_name devices to check>\n";
+                for my $key ( sort keys %check ) {
+                        printf STDERR "Checking enabled for device $key\n";
+                }
+                print STDERR "</$prog_name devices to check>\n";
+        }
+}
+
+sub check_drbd_state {
+        for my $drbd_device ( sort keys %check ) {
+                if ((defined($drbd_version)) && ($drbd_version >= '8.0')) {
+                        #
+                        # We're dealing with version 8.0 or greater 
+                        # Set data state
+                        #
+                        if ((defined($ds{$drbd_device})) &&
+                            (defined($state{$ds{$drbd_device}}))) {
+                                $state{$ds{$drbd_device}}->{$drbd_device}->{'level'} = 1;
+                        } elsif (defined($ds{$drbd_device})) {
+                                &myexit('CRIT',"Data_state_unknown_value_'$ds{$drbd_device}'_for_device_${drbd_device}");
+                        }
+                }
+                if ((defined($drbd_version)) && ($drbd_version == '0.7')) {
+                        #
+                        # We're dealing with version 0.7 
+                        # Set local data consistency
+                        #
+                        if ((defined($ld{$drbd_device})) &&
+                            (defined($state{$ld{$drbd_device}}))) {
+                                $state{$ld{$drbd_device}}->{$drbd_device}->{'level'} = 1;
+                        } elsif (defined($ld{$drbd_device})) {
+                                &myexit('CRIT',"Local_data_consistency_unknown_value_'$ld{$drbd_device}'_for_device_${drbd_device}");
+                        }
+                }
+                #
+                # Check for a state value (Primary, Secondary, etc)
+                #
+                if ((defined($st{$drbd_device})) &&
+                    (defined($state{$st{$drbd_device}}))) {
+                        $state{$st{$drbd_device}}->{$drbd_device}->{'level'} = 1;
+                } elsif (defined($st{$drbd_device})) {
+                        &myexit('CRIT',"Node_state_unknown_value_'$st{$drbd_device}'_for_device_${drbd_device}");
+                }
+                # 
+                # Check for a connected state value (Connected, StandAlone, etc)
+                #
+                if (defined($state{$cs{$drbd_device}})) {
+                        $state{$cs{$drbd_device}}->{$drbd_device}->{'level'} = 1;
+                } else {
+                        &myexit('CRIT',"Connection_state_unknown_value_'$cs{$drbd_device}'_for_device_${drbd_device}");
+                }
+                # 
+                # Debugging information
+                #
+                if (defined($debug_mode) && ($debug_mode == 1)) {
+                        print STDERR "<$prog_name device $drbd_device status>\n";
+                        for my $key ( keys %state ) {
+                                if (defined($state{$key}->{$drbd_device}->{'level'})) {
+                                        print STDERR "$key $state{$key}->{'value'}\n";
+                                }
+                        }
+                        print STDERR "</$prog_name device $drbd_device status>\n";
+                }
+                #
+                # Determine if any values are CRIT or WARN
+                #
+                for my $key ( keys %state ) {
+                        if (defined($state{$key}->{$drbd_device}->{'level'})) {
+                                if ($state{$key}->{'value'} eq "CRIT") {
+                                        $critical{$drbd_device} = 1;
+                                }
+                                if ($state{$key}->{'value'} eq "WARN") {
+                                        $warning{$drbd_device} = 1;
+                                }
+                        }
+                }
+        }
+}
+
+sub report_status {
+        my $message;
+        my $critical_count=int(keys %critical);
+        my $warning_count=int(keys %warning);
+        if ($critical_count > 0) {
+                #
+                # We found a CRIT situation
+                #
+                my $i = 0;
+                for my $device (sort keys %critical) {
+                        $message.=sprintf("Device_%d%s_$cs{$device}%s%s", $device,defined($st{$device})?"_$st{$device}":"",defined($ld{$device})?"_$ld{$device}":"",defined($ds{$device})?"_$ds{$device}":""); 
+                        $i++;
+                        if ($i != $critical_count) {
+                                $message.=", ";
+                        }
+                }
+                &myexit('CRIT',$message);
+        } elsif ($warning_count > 0) {
+                #
+                # We found a WARN situation
+                #
+                my $i = 0;
+                for my $device (sort keys %warning) {
+                        $message.=sprintf("Device_%d%s_$cs{$device}%s%s", $device,defined($st{$device})?"_$st{$device}":"",defined($ld{$device})?"_$ld{$device}":"",defined($ds{$device})?"_$ds{$device}":""); 
+                        $i++;
+                        if ($i != $warning_count) {
+                                $message.=", ";
+                        }
+                }
+                &myexit('WARN',$message);
+        } else {
+                #
+                # Everything checks out OK
+                #
+                my $device_count=int(keys %check);
+                if ($device_count == 1) {
+                        for my $device ( sort keys %check ) {
+                                $message=sprintf("Device_%d%s_$cs{$device}%s%s", $device,defined($st{$device})?"_$st{$device}":"",defined($ld{$device})?"_$ld{$device}":"",defined($ds{$device})?"_$ds{$device}":"");
+                        }
+                } else {
+                        my $i = 0;
+                        for my $device ( sort keys %check ) {
+                                $message.=sprintf("Dev_%d_%0.3s%0.3s%0.3s%0.3s", $device,defined($st{$device})?"$st{$device}":"",$cs{$device},defined($ld{$device})?"$ld{$device}":"",defined($ds{$device})?"$ds{$device}":"");
+                                $i++;
+                                if ($i != $device_count) {
+                                        $message.=", ";
+                                }
+                        }
+                }
+                &myexit('OK',$message);
+        }
+}
+
+sub set_values {
+        #
+        # Set item to value requested
+        #
+        my ($items,$value) = @_;
+        my @items = split(/,/,$items);
+        foreach my $item (@items) {
+                if (defined($state{$item})) {
+                        $state{$item}->{'value'} = "$value";
+                } else {
+                        print STDERR "State '$item' not found\n"; 
+                }
+        }
+}
+
+sub change_values {
+        #
+        # Look for all values of a given type, set requested value to OK
+        # and all other values to CRIT
+        #
+        my ($argument,$type,$error1,$error2) = @_;
+        if ((defined($state{$argument})) && 
+            ($state{$argument}->{'type'} eq "$type")) {
+                for my $key ( keys %state ) {
+                        if ($state{$key}->{'type'} eq "$type") {
+                                if ($key eq $argument) {
+                                        &set_values($argument,'OK');
+                                } else {
+                                        &set_values($key,'CRIT');
+                                }
+                        } 
+                }
+        } else {
+                &myexit('UNKNOWN',"$error1 option only works for $error2");
+        }
+}
+
+sub myexit {
+        #
+        # Print error message and exit
+        #
+        my ($error, $message) = @_;
+        if (!(defined($errorcodes{$error}))) {
+                printf STDERR "Error code $error not known\n";
+                print "DRBD UNKNOWN: $message\n";
+                exit $errorcodes{'UNKNOWN'}->{'retvalue'};
+        }
+        print "$error=$message\n";
+        exit $errorcodes{$error}->{'retvalue'};
+}

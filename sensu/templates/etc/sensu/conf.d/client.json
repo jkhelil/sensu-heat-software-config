@@ -1,0 +1,17 @@
+{
+  "client": {
+    "name": "{{ ansible_hostname }}",
+    "address": "{{ ansible_fqdn }}",
+    "subscriptions": [ "sensu.system" ],
+    "keepalive": {
+      "thresholds": {
+        "warning": 60,
+        "critical": 300
+      },
+      "handlers": ["default"],
+      "refresh": 180
+    },
+    "graphite_cpu": "http://localhost/render?from=-12hours&until=now&width=500&height=200&bgcolor=white&fgcolor=black&majorGridLineColor=darkgrey&drawNullAsZero=1&target=cactiStyle(sensu.carinola.CPU.sys)&target=color(drawAsInfinite(events(%27sensu_event_ok_carinola_CPU%27)),%27green%27)&target=color(drawAsInfinite(events(%27sensu_event_warning_carinola_CPU%27)),%27yellow%27)&target=color(drawAsInfinite(events(%27sensu_event_critical_carinola_CPU%27)),%27red%27)&uchiwa_force_display_as_image=.jpg",
+    "graphite_ram": "http://localhost/render?from=-12hours&until=now&width=500&height=200&bgcolor=white&fgcolor=black&majorGridLineColor=darkgrey&drawNullAsZero=1&target=cactiStyle(sensu.carinola.RAM.FREE)&target=cactiStyle(sensu.carinola.RAM.USED)&target=color(drawAsInfinite(events(%27sensu_event_ok_carinola_RAM_FREE%27)),%27green%27)&target=color(drawAsInfinite(events(%27sensu_event_warning_carinola_RAM_FREE%27)),%27yellow%27)&target=color(drawAsInfinite(events(%27sensu_event_critical_carinola_RAM_FREE%27)),%27red%27)&uchiwa_force_display_as_image=.jpg"
+  }
+}

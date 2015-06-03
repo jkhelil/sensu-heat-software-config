@@ -1,0 +1,103 @@
+{
+  "checks": {
+    "RAM": {
+      "type": "metric", 
+      "handlers": ["influxdb","mailer","tivoli","graphite"],
+      "command": "/etc/sensu/nagios/Systeme/check_mem.pl -f -C -w :::ram.warn|10::: -c :::ram.crit|5::: ",
+      "interval": 20,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 10,
+      "refresh": 60,
+      "contacts": ["ops"]
+    },
+    "Disk": {
+      "type": "metric", 
+      "handlers": ["influxdb","tivoli","graphite"],
+      "command": "/etc/sensu/nagios/Systeme/check_fsuse.sh -w :::disk.warn|90::: -c :::disk.crit|95:::",
+      "interval": 180,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 2,
+      "refresh": 180
+    },
+    "Charge": {
+      "type": "metric", 
+      "handlers": ["influxdb","tivoli","graphite"],
+      "command": "/etc/sensu/nagios/Systeme/check_load.sh",
+      "interval": 180,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 10,
+      "refresh": 180
+    },
+    "CPU": {
+      "type": "metric", 
+      "handlers": ["influxdb","mailer","tivoli","graphite"],
+      "command": "/etc/sensu/nagios/Systeme/check_cpu.ksh  :::cpu.warn|90::: :::cpu.crit|95:::",
+      "interval": 20,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 10,
+      "refresh": 60,
+      "contacts": ["sgbd"]
+    },
+    "Swap": {
+      "type": "metric", 
+      "handlers": ["influxdb","tivoli","graphite"],
+      "command": "/etc/sensu/nagios/Systeme/check_swap.pl -w :::swap.warn|10::: -c :::swap.crit|5:::",
+      "interval": 180,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 10,
+      "refresh": 60
+    },  
+    "Network": {
+      "type": "metric", 
+      "handlers": ["influxdb","tivoli","graphite"],
+      "command": "/etc/sensu/nagios/Systeme/check_netiface.pl",
+      "interval": 300,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 2,
+      "refresh": 300
+    },
+    "Cron": {
+      "handlers": ["tivoli"],
+      "command": "/etc/sensu/nagios/Systeme/check_crond.sh",
+      "interval": 600,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 2,
+      "refresh": 300
+    },
+    "Mount": {
+      "handlers": ["tivoli"],
+      "command": "/etc/sensu/nagios/Systeme/check_mount.sh",
+      "interval": 600,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 5,
+      "refresh": 300
+    },
+    "Nocheck": {
+      "handlers": [],
+      "command": "/etc/sensu/nagios/Generic/check_nocheck.sh",
+      "interval": 3600,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 1,
+      "refresh": 1800
+    },  
+    "NTP": {
+      "type": "metric", 
+      "handlers": ["influxdb","tivoli","graphite"],
+      "command": "/etc/sensu/nagios/Systeme/check_ntp.sh",
+      "interval": 600,
+      "output_format": "nagios_perfdata",
+      "subscribers": [ "sensu.system" ],
+      "occurrences": 6,
+      "refresh": 300
+    }
+  }
+}

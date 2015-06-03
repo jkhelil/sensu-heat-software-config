@@ -1,0 +1,72 @@
+{
+  "handlers": {
+    "tivoli": {
+      "type": "pipe",
+      "mutator": "tivoli",
+      "command": "/etc/sensu/handlers/tivoli.rb",
+        "severities": [ "critical" ]
+    },
+    "file": {
+      "type": "pipe",
+      "command": "/etc/sensu/handlers/file.rb"
+    },
+    "graphite": {
+      "type": "transport",
+      "mutator": "nagios_perfdata",
+      "pipe": {
+        "type": "topic",
+        "name": "metrics",
+        "options": {
+           "durable": "true",
+           "passive": "true"
+        }
+      }
+    },
+    "graphite_event": {
+      "type": "pipe",
+      "command": "/etc/sensu/handlers/graphite_event.rb"
+    },
+    "show": {
+      "type": "pipe",
+      "command": "/etc/sensu/handlers/show.rb",
+        "severities": [ "critical" ]
+    },
+    "mailer": {
+      "type": "pipe",
+      "command": "/etc/sensu/handlers/mailer.rb",
+        "severities": [ "critical" ]
+    },
+    "influxdb": {
+      "type": "pipe",
+      "command": "/etc/sensu/handlers/influxdb.rb",
+        "severities": [ "critical" ]
+    },
+    "default": {"type": "pipe", "command": "cat"}
+  },
+  "graphite_event": {
+    "server_uri": "http://graphitet1-bck/events/"
+  },
+  "mailer": {
+    "admin_gui": "http://10.11.0.7:1080/",
+    "mail_from": "sensu@vsc.com",
+    "mail_to": "ops@vsc.com",
+    "smtp_address": "10.11.0.7",
+    "smtp_port": "1025",
+    "contacts": {
+      "ops":  { "mail_to":  "ops@vsc.com" },
+      "sgbd": { "mail_to":  "sgbd@vsc.com" }
+    }
+  },
+  "flapjack": {
+    "host": "{{ redis_host }}",
+    "port": 6379,
+    "db": "1"
+  },
+  "influxdb":{
+    "server": "{{ influxdb_host }}",
+    "port"  : "8086",
+    "username" : "sensu",
+    "password" : "sensu",
+    "database" : "sensu_metrics"
+  }
+}

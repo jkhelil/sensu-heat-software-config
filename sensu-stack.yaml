@@ -1,0 +1,139 @@
+heat_template_version: 2013-05-23
+parameters:
+  key_name:
+    type: string
+    default: jawed
+  flavor:
+    type: string
+    default: m1.small
+  image:
+    type: string
+    default: centos7-software-config6
+
+resources:
+  the_sg:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: the_sg
+      description: Ping and SSH
+      rules:
+      - protocol: icmp
+      - protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - protocol: tcp
+        port_range_min: 3000
+        port_range_max: 3000
+
+
+  deployment-redis:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      config:
+        get_resource: config-redis
+      server:
+        get_resource: redis
+      actions:
+        - CREATE
+        - UPDATE
+        - SUSPEND
+        - RESUME
+
+  config-redis:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ansible
+      config:
+        get_file: redis/redis.yaml
+      outputs:
+      - name: result-redis
+
+  redis:
+    type: OS::Nova::Server
+    properties:
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      key_name: {get_param: key_name}
+      security_groups:
+      - {get_resource: the_sg}
+      user_data_format: SOFTWARE_CONFIG
+
+  deployment-rabbit:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      config:
+        get_resource: config-rabbit
+      server:
+        get_resource: rabbitmq
+      actions:
+        - CREATE
+        - UPDATE
+        - SUSPEND
+        - RESUME
+
+  config-rabbit:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ansible
+      config:
+        get_file: rabbitmq/rabbitmq.yaml
+      outputs:
+      - name: result-rabbit
+
+  rabbitmq:
+    type: OS::Nova::Server
+    properties:
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      key_name: {get_param: key_name}
+      security_groups:
+      - {get_resource: the_sg}
+      user_data_format: SOFTWARE_CONFIG
+
+  deployment-sensu:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      config:
+        get_resource: config-sensu
+      server:
+        get_resource: sensu
+      actions:
+        - CREATE
+        - UPDATE
+        - SUSPEND
+        - RESUME
+
+  config-sensu:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ansible
+      config:
+        get_file: rabbitmq/rabbitmq.yaml
+      outputs:
+      - name: result-sensu
+
+  sensu:
+    type: OS::Nova::Server
+    properties:
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      key_name: {get_param: key_name}
+      security_groups:
+      - {get_resource: the_sg}
+      user_data_format: SOFTWARE_CONFIG
+outputs:
+  result:
+    value:
+      get_attr: ["deployment-redis", "result-redis"]
+  stdout:
+    value:
+      get_attr: ["deployment-redis", deploy_stdout]
+  stderr:
+    value:
+      get_attr: ["deployment-redis", deploy_stderr]
+  status_code:
+    value:
+      get_attr: ["deployment-redis", deploy_status_code]
+  other_result:
+    value:
+      get_attr: ["deployment-rabbit", "result-rabbit"]

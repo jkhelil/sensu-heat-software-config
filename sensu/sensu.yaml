@@ -1,0 +1,70 @@
+---
+- name: Install sensu server
+  connection: local
+  hosts: localhost
+  sudo: True
+  tasks:
+
+
+    - name: Ensure sensu server is installed
+      yum:
+        name: sensu
+        state: latest
+
+    - name: Create sensu extensions/handlers directory
+      file: path=/etc/sensu/extensions/handlers owner=sensu group=sensu mode=0640 state=directory
+
+    - name: Configure sensu server
+      template:  
+        src: templates/etc/sensu/conf.d/{{ item }}
+        dest: /etc/sensu/conf.d/{{ item }}
+        owner: sensu
+        group: sensu
+        mode: 0644
+      with_items:
+        - mutators.json
+        - check_system_nagios_way.json
+        - handlers.json
+
+    - name: Configure sensu server handlers and mutators
+      template:  
+        src: templates/etc/sensu/{{ item }}
+        dest: /etc/sensu/{{ item }}
+        owner: sensu
+        group: sensu
+        mode: 0755
+      with_items:
+        - config.json
+        - handlers/file.rb
+  
+    - name: ensure services are started and enabled
+      service: 
+        name: "{{ item }}"
+        state: restarted 
+        enabled: yes
+      with_items: 
+        - sensu-server
+        - sensu-api
+
+    - name: Ensure uchiwa is installed
+      yum:
+        name: uchiwa
+        state: latest
+
+    - name: Configure uchiwa
+      template:
+        src: templates/etc/sensu/{{ item }}
+        dest: /etc/sensu/{{ item }}
+        owner: sensu
+        group: sensu
+        mode: 0644
+      with_items:
+        - uchiwa.json
+
+    - name: ensure services are started and enabled
+      service: 
+        name: "{{ item }}"
+        state: restarted 
+        enabled: yes
+      with_items: 
+        - uchiwa

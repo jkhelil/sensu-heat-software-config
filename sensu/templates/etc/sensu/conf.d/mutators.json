@@ -1,0 +1,10 @@
+{
+  "mutators": {
+    "tivoli": {
+      "command": "/etc/sensu/mutators/tivoli.rb"
+    },
+    "nagios_perfdata": {
+      "command": "/etc/sensu/mutators/nagios_perfdata.rb"
+    }
+  }
+}

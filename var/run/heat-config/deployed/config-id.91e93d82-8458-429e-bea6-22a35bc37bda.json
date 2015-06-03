@@ -1,0 +1,40 @@
+{
+  "inputs": [
+    {
+      "type": "String", 
+      "name": "deploy_server_id", 
+      "value": "6a2ad6ba-f809-44e8-99be-fd388ab74e9c", 
+      "description": "ID of the server being deployed to"
+    }, 
+    {
+      "type": "String", 
+      "name": "deploy_action", 
+      "value": "CREATE", 
+      "description": "Name of the current action being deployed"
+    }, 
+    {
+      "type": "String", 
+      "name": "deploy_stack_id", 
+      "value": "sensu-stack/d0ffc631-0926-4c62-b3ac-f209ff82d2e9", 
+      "description": "ID of the stack this deployment belongs to"
+    }, 
+    {
+      "type": "String", 
+      "name": "deploy_resource_name", 
+      "value": "deployment", 
+      "description": "Name of this deployment resource in the stack"
+    }, 
+    {
+      "type": "String", 
+      "name": "deploy_signal_id", 
+      "value": "http://oscontrollerh1:8000/v1/signal/arn%3Aopenstack%3Aheat%3A%3A757a7144d3a443c4acbf908f2d0bb900%3Astacks%2Fsensu-stack%2Fd0ffc631-0926-4c62-b3ac-f209ff82d2e9%2Fresources%2Fdeployment?Timestamp=2015-06-03T09%3A49%3A41Z&SignatureMethod=HmacSHA256&AWSAccessKeyId=4254548277744d9fa3bf1aab2fe0fd3c&SignatureVersion=2&Signature=iRxSoGRhE%2Bc4bcSZs5jV%2BwvBMD6j%2FFRAGF7HTXf5Mgk%3D", 
+      "description": "ID of signal to use for signalling output values"
+    }
+  ], 
+  "group": "ansible", 
+  "name": "sensu-stack-config-bgudakux2hp4", 
+  "outputs": [], 
+  "id": "91e93d82-8458-429e-bea6-22a35bc37bda", 
+  "config": "---\n- name: Configure redis server\n  connection: local\n  hosts: localhost\n  sudo: True\n  tasks:\n\n    - name: Install EPEL repo.\n      yum:\n        name: \"http://download.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm\"\n        state: present\n\n    - name: Import EPEL GPG key.\n      rpm_key:\n        key: \"/etc/pki/rpm-gpg/RPM-GPG-KEY-EPEL-{{ ansible_distribution_major_version }}\"\n        state: present\n\n    - name: Ensure redis server is installed\n      yum:\n        name: redis\n        state: latest\n\n    - name: Ensure redis server is stopped\n      service:\n        name: redis\n        state: stopped\n        enabled: yes\n\n    - name: Ensure redis server is configured\n      template:\n        src: templates/etc/redis/redis.conf\n        dest: /etc/redis.conf\n        owner: redis\n        group: redis\n        mode: 0644\n\n    - name: Ensure redis server is started\n      service:\n        name: redis\n        state: started\n        enabled: yes\n\n", 
+  "options": {}
+}

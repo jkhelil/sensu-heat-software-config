@@ -1,0 +1,5 @@
+{
+  "deploy_stdout": "\nPLAY [Configure redis server] ************************************************* \n\nGATHERING FACTS *************************************************************** \nok: [localhost]\n\nTASK: [Install EPEL repo.] **************************************************** \nok: [localhost]\n\nTASK: [Import EPEL GPG key.] ************************************************** \nok: [localhost]\n\nTASK: [Ensure redis server is installed] ************************************** \nok: [localhost]\n\nTASK: [Ensure redis server is stopped] **************************************** \nok: [localhost]\n\nTASK: [Ensure redis server is configured] ************************************* \nchanged: [localhost]\n\nTASK: [Ensure redis server is started] **************************************** \nchanged: [localhost]\n\nPLAY RECAP ******************************************************************** \nlocalhost                  : ok=7    changed=2    unreachable=0    failed=0   \n\n", 
+  "deploy_stderr": "", 
+  "deploy_status_code": 0
+}
